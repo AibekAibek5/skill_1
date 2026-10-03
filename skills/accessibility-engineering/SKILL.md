@@ -12,7 +12,7 @@ Accessibility is not a polish step — it's a legal requirement in many jurisdic
 ## When to Use
 
 - Building new UI components or pages
-- Before shipping any user-facing change that touches UI
+- Before shipping any user-facing change (invoked by `/ship`)
 - When a11y issues are reported (e.g., "screen reader can't read this", "keyboard navigation broken")
 - When auditing an existing interface for compliance
 - When working with forms, modals, navigation, or interactive widgets
