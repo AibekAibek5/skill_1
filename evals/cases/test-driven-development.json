@@ -13,6 +13,10 @@
       {
         "prompt": "What tests should cover this new parsing logic before I write it?",
         "top_k": 3
+      },
+      {
+        "prompt": "Add unit tests for this function, there are none yet",
+        "top_k": 3
       }
     ],
     "negative": [
