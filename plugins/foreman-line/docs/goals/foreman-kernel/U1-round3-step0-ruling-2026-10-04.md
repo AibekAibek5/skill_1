@@ -18,6 +18,7 @@ The exact local-only verification aids proposed at Step 0 are approved inside th
 `README.txt`, `consumer_gate.py`, `drive_a28.py`, `drive_a29.py`, `drive_a30.py`, `drive_a31.py`, `drive_a32.py`, `drive_a33.py`, `drive_a35.py`, `drive_a36.py`, `drive_a37.py`, `drive_a39.py`, `drive_mut.py`, `drivelib.py`, `lint_embedded.py`, `run_all.py`, `u1r3_extract.py`, `u1r3_pipeline.py`, `u1r3_records.py`.
 
 These are throwaway offline test aids, not production workflow code. `consumer_gate.py` is only a reference test of the ratified consumer predicate; it is not FK-P19 implementation or evidence of a real consumer. The generated `__pycache__/` is excluded from Allowed Files and from every commit; remove it during post-smoke cleanup.
+The pre-existing dirty `drive_a28.py` and `drive_a31.py` are within these approved names but their contents remain unclaimed. The recovery builder may inspect and retain or adjust them only against their ratified amendments; do not stage them blindly or discard them. Their registered-case baselines remain 598 and 56 respectively.
 
 All other kickstarter Allowed Files remain unchanged: the three U1 workflows, `u1-sandbox.mjs`, only the five existing fixture-evidence JSON files, amendment-named request/oracle records, checklist `reobservedBy` only, and the named implementation-notes file. Pin, contract, amendment sources, routing policy, specs, other directories and all external surfaces remain forbidden.
 
