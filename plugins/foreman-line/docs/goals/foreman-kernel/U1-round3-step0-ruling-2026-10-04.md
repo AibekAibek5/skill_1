@@ -51,3 +51,9 @@ Historical exited-service results only—not current verification: A-U1.8.28 251
 ## Phase-B stop conditions remain
 
 No push, PR, tag, remote ref, `gh`, `az`, workflow dispatch, live Azure/GitHub change, fixture provisioning, pin update, or merge is authorized. `u1-fixture` remains owner-held; nine checklist facts remain unrecorded; A-U1.8.34 live facts, A-U1.8.37 clause 1 landing, A-U1.8.38 re-pin/live evidence, and the independent closure review remain gated. The closure-review identity remains `openai/gpt-6-astra`.
+
+## Recovery-builder ruling — 2026-10-04
+
+The recovery builder made one pre-fix `py -3 run_all.py` attempt; it timed out after 3600 seconds with no exit code and made no file changes. Treat that as a red/incomplete baseline, not a pass. Do not rerun it merely to confirm the timeout. The earlier exited-service failures remain historical. After all code changes, run the required final local verification once; if it cannot complete, stop and report the exact outcome without retrying.
+
+A-U1.8.34's live records, §9.2 statement and sunset are explicitly Phase-B/owner-gated in the kickstarter; A-U1.8.39 E-2 says the limitation text lands with Phase-B contract transcription. They do not block the Phase-A workflow implementation. Do not edit the contract or consumer-rule text. Continue only inside the approved Phase-A Allowed Files; any additional path/decision still stops before its affected edit.
