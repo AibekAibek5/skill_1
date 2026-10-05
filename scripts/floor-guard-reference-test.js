@@ -174,6 +174,50 @@ for (const [name, expectedExit, mutate] of cases) {
   });
 }
 
+// The guard parses git's output, so neither a rename nor the user's git config or environment
+// may turn a violation into output it skips. Each of these exited 0 ("clean") before.
+const hostile = [
+  ['a test file renamed away is a violation', (root) => {
+    git(root, 'mv', 'app.test.js', 'app.test.js.disabled');
+  }, /\[test-deleted\] app\.test\.js:/],
+  ['CONSTRAINTS.md renamed away is a violation', (root) => {
+    git(root, 'mv', 'CONSTRAINTS.md', 'CONSTRAINTS.old');
+  }, /\[rule-removed\] CONSTRAINTS\.md:/],
+  ['a suppression under color.ui=always is a violation', (root) => {
+    git(root, 'config', 'color.ui', 'always');
+    fs.writeFileSync(path.join(root, 'app.js'), '// @ts-ignore\nmodule.exports = 1;\n');
+  }, /\[silenced-checker\] app\.js:/],
+  ['a suppression under an external diff driver is a violation', (root) => {
+    git(root, 'config', 'diff.external', 'true');
+    fs.writeFileSync(path.join(root, 'app.js'), '// @ts-ignore\nmodule.exports = 1;\n');
+  }, /\[silenced-checker\] app\.js:/],
+  ['a suppression under a textconv driver is a violation', (root) => {
+    fs.writeFileSync(path.join(root, '.gitattributes'), '*.js diff=strip\n');
+    git(root, 'config', 'diff.strip.textconv', 'sed -e s/@ts-ignore//');
+    fs.writeFileSync(path.join(root, 'app.js'), '// @ts-ignore\nmodule.exports = 1;\n');
+  }, /\[silenced-checker\] app\.js:/],
+  ['a suppression in a file marked -diff is a violation', (root) => {
+    fs.writeFileSync(path.join(root, '.gitattributes'), '*.js -diff\n');
+    fs.writeFileSync(path.join(root, 'app.js'), '// @ts-ignore\nmodule.exports = 1;\n');
+  }, /\[silenced-checker\] app\.js:/],
+  ['a suppression in a new file under GIT_EXTERNAL_DIFF is a violation', (root) => {
+    fs.writeFileSync(path.join(root, 'new.js'), '// @ts-ignore\nmodule.exports = 1;\n');
+    return { GIT_EXTERNAL_DIFF: 'true' };
+  }, /\[silenced-checker\] new\.js:/],
+];
+
+for (const [name, mutate, expected] of hostile) {
+  test(`floor guard: ${name}`, () => {
+    const root = makeRepo();
+    const env = mutate(root) || {};
+    const result = spawnSync(process.execPath, [guard, '--base', 'HEAD'], {
+      cwd: root, encoding: 'utf8', env: { ...process.env, ...env },
+    });
+    assert.equal(result.status, 1, `stdout: ${result.stdout}\nstderr: ${result.stderr}`);
+    assert.match(result.stderr, expected);
+  });
+}
+
 test('floor guard: a removed exception row is silent', () => {
   const root = makeRepo();
   editConstraints(root, '| W1 | no-explicit-any | @owner | 2026-11-01 |\n', '');

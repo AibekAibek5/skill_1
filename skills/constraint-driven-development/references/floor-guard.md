@@ -27,8 +27,14 @@ const base = (() => {
 
 // `git diff --no-index` exits 1 whenever the two sides differ, which is the normal case for a
 // new file, so that output is kept. Any other failure is null, and null never reads as clean.
+// The guard parses git's output, so the user's config and environment must not reshape it:
+// color codes, an external diff driver or textconv, or a missing a/ b/ prefix would each turn a
+// violation into lines the parser skips, and skipped lines read as clean. GIT_EXTERNAL_DIFF and
+// GIT_DIFF_OPTS are dropped from the environment for the same reason.
+const env = { ...process.env };
+delete env.GIT_EXTERNAL_DIFF; delete env.GIT_DIFF_OPTS;
 const git = (args, { diffExit = false } = {}) => {
-  try { return execFileSync('git', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }); }
+  try { return execFileSync('git', args, { encoding: 'utf8', env, stdio: ['ignore', 'pipe', 'pipe'] }); }
   catch (e) { return diffExit && e.status === 1 && typeof e.stdout === 'string' ? e.stdout : null; }
 };
 const bail = (msg) => { console.error('floor-guard: ' + msg); process.exit(2); };
@@ -44,13 +50,18 @@ process.chdir(top);
 const mergeBase = git(['merge-base', base, 'HEAD'])?.trim();
 if (!mergeBase) bail('no merge base against ' + base);
 
-// Unified diff plus untracked files (git diff alone cannot see new files).
-const tracked = git(['diff', '--unified=0', mergeBase, '--']);
+// Unified diff plus untracked files (git diff alone cannot see new files). A rename is reported
+// as a deletion plus an addition (--no-renames), so moving a test file to `app.test.js.disabled`
+// or `CONSTRAINTS.md` to another name is still a deleted file. --text keeps a file that
+// .gitattributes marks `-diff` or binary from collapsing to "Binary files differ".
+const DIFF = ['--unified=0', '--no-color', '--no-ext-diff', '--no-textconv', '--no-renames',
+  '--text', '--src-prefix=a/', '--dst-prefix=b/'];
+const tracked = git(['diff', ...DIFF, mergeBase, '--']);
 if (tracked === null) bail('could not diff against ' + mergeBase);
 const untrackedFiles = git(['ls-files', '--others', '--exclude-standard']);
 if (untrackedFiles === null) bail('could not list untracked files');
 const untracked = untrackedFiles.split('\n').filter(Boolean).map((f) => {
-  const d = git(['diff', '--no-index', '--unified=0', '/dev/null', f], { diffExit: true });
+  const d = git(['diff', '--no-index', ...DIFF, '/dev/null', f], { diffExit: true });
   if (d === null) bail('could not diff untracked file ' + f);
   return d;
 }).join('\n');
@@ -99,6 +110,7 @@ for (const { file, text } of added) {
 
 // 2b. A test file deleted, or an assertion removed from a test file that still exists.
 for (const f of deleted) if (isTest(f)) flag('test-deleted', f, 'file deleted');
+for (const f of deleted) if (isConstraints(f)) flag('rule-removed', f, 'CONSTRAINTS.md deleted');
 for (const { file, text } of removed) {
   if (isTest(file) && !deleted.includes(file) && /\b(expect|assert|should)\b/.test(text)) {
     flag('assertion-removed', file, text);
