@@ -28,7 +28,8 @@ if ! command -v jq >/dev/null 2>&1; then
   printf '%s\n' "error: missing jq" >&2; exit 1
 fi
 
-CACHE="${CLAUDE_PROJECT_DIR:-.}/.claude/.simplify-ignore-cache"
+PROJECT_DIR="${CLAUDE_PROJECT_DIR:-.}"
+CACHE="$PROJECT_DIR/.claude/.simplify-ignore-cache"
 if [ -t 0 ]; then INPUT="{}"; else INPUT=$(cat); fi
 
 # Parse hook input — trap errors explicitly so set -e doesn't cause
@@ -53,6 +54,44 @@ hash_cmd() {
 }
 file_id() { printf '%s' "$1" | hash_cmd | cut -c1-16; }
 block_hash() { printf '%s' "$1" | hash_cmd | cut -c1-8; }
+
+# -- inside_project: may the hook read or write the file at $1? ---------------
+# The cache lives inside the project, so a cloned repository can ship a crafted
+# one whose <id>.path names any file on disk. Stop would then overwrite that
+# file with the shipped .bak and copy its previous contents into the project.
+# The hook therefore only ever touches paths inside the project root:
+#   - no newline and no `..` component (checked before anything is resolved);
+#   - the final component is not a symlink (a write would follow it);
+#   - the nearest existing ancestor, resolved physically with `cd -P` so that
+#     symlinked parent directories are followed, lies under the physically
+#     resolved project root. Missing trailing directories are allowed (a moved
+#     file's directory may be gone) but must not exist as anything else.
+# On Git Bash/MSYS, C:\... and C:/... paths are converted with cygpath first.
+inside_project() {
+  local p="$1" root="$PROJECT_DIR" dir next rest="" nl='
+'
+  [ -n "$p" ] || return 1
+  case "$p" in *"$nl"*) return 1 ;; esac
+  case "/${p//\\//}/" in */../*) return 1 ;; esac
+  if command -v cygpath >/dev/null 2>&1; then
+    p=$(cygpath -u -- "$p" 2>/dev/null) || return 1
+    root=$(cygpath -u -- "$root" 2>/dev/null) || return 1
+  fi
+  case "/${p//\\//}/" in */../*) return 1 ;; esac
+  if [ -L "$p" ]; then return 1; fi
+  root=$(cd -P -- "$root" 2>/dev/null && pwd -P) || return 1
+  dir=$(dirname -- "$p")
+  while [ ! -d "$dir" ]; do
+    if [ -L "$dir" ] || [ -e "$dir" ]; then return 1; fi
+    rest="/$(basename -- "$dir")$rest"
+    next=$(dirname -- "$dir")
+    if [ "$next" = "$dir" ]; then return 1; fi
+    dir="$next"
+  done
+  dir=$(cd -P -- "$dir" 2>/dev/null && pwd -P) || return 1
+  case "${dir%/}$rest/$(basename -- "$p")" in "${root%/}"/*) return 0 ;; esac
+  return 1
+}
 # Escape glob metacharacters so ${var/pattern/repl} treats pattern as literal.
 # Needed for Bash 3.2 (macOS) where quotes don't suppress globbing in PE patterns.
 escape_glob() {
@@ -241,6 +280,13 @@ if [ -z "$TOOL_NAME" ]; then
     pathfile="$CACHE/${fid}.path"
     [ -f "$pathfile" ] || { rm -f "$bak"; continue; }
     orig=$(cat "$pathfile")
+    if ! inside_project "$orig"; then
+      # Never read or write through a path the cache names outside the
+      # project. Keep the entry so a genuine backup is not destroyed.
+      printf 'Warning: refusing to restore %s: outside %s or through a symlink. Cache entry kept at %s\n' \
+        "$orig" "$PROJECT_DIR" "$bak" >&2
+      continue
+    fi
     if [ -f "$orig" ]; then
       # A change can reach the file through a route that fires no Edit or Write
       # event (a Bash command, a formatter, an external editor), and the backup
@@ -286,6 +332,7 @@ fi
 if [ "$TOOL_NAME" = "Read" ]; then
   [ -f "$FILE_PATH" ] || exit 0
   case "$(basename "$FILE_PATH")" in simplify-ignore*|SIMPLIFY-IGNORE*) exit 0 ;; esac
+  inside_project "$FILE_PATH" || exit 0
 
   mkdir -p "$CACHE"
   ID=$(file_id "$FILE_PATH")
@@ -326,6 +373,7 @@ fi
 
 # ── PostToolUse Edit|Write: expand, then re-filter ────────────────────────────
 if [ "$TOOL_NAME" = "Edit" ] || [ "$TOOL_NAME" = "Write" ]; then
+  inside_project "$FILE_PATH" || exit 0
   ID=$(file_id "$FILE_PATH")
   [ -f "$CACHE/${ID}.bak" ] || exit 0
   ls "$CACHE/${ID}".block.* >/dev/null 2>&1 || exit 0
