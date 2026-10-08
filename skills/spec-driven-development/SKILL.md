@@ -167,6 +167,8 @@ REFRAMED SUCCESS CRITERIA:
 
 This lets you loop, retry, and problem-solve toward a clear goal rather than guessing what "faster" means.
 
+**Requirement IDs (opt-in).** Only when the user asks for traceability, number the Success Criteria with IDs and map them to tests, following the `requirement-traceability` skill. Otherwise leave the spec as written.
+
 **Stop after writing the spec (CRITICAL).** Once the spec is saved:
 
 1. Summarize it and list any Open Questions.

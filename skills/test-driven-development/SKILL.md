@@ -298,6 +298,10 @@ describe('TaskService', () => {
 });
 ```
 
+### Tag Tests with Requirement IDs
+
+When the spec carries requirement IDs, start each test name with its ID and a colon (`CPN-3: rejects expired coupons`), following the `requirement-traceability` skill. A spec without IDs needs nothing here.
+
 ## Test Anti-Patterns to Avoid
 
 | Anti-Pattern | Problem | Fix |

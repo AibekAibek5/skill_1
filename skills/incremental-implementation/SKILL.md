@@ -206,6 +206,7 @@ After each increment, verify with the repository's own commands (see the test-dr
 - [ ] Type checking passes, where the stack has one (`npx tsc --noEmit`, `mypy`, ...)
 - [ ] Linting passes (the repository's lint command)
 - [ ] The new functionality works as expected
+- [ ] If the spec carries requirement IDs, the task's `Covers:` IDs pass the `requirement-traceability` check
 - [ ] The change is committed with a descriptive message
 
 **Note:** Run each verification command after a change that could affect it. After a successful run, don't repeat the same command unless the code has changed since — re-running on unchanged code adds no information.
