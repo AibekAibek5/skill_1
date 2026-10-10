@@ -68,20 +68,33 @@ function slugify(heading) {
   return text.toLowerCase().replace(/[^\p{L}\p{M}\p{N}_\- ]/gu, '').replace(/ /g, '-');
 }
 
-// The anchors a file's ATX headings produce, outside fenced blocks. A repeated
+// Top-level ATX and Setext heading anchors outside fenced blocks. A repeated
 // slug gets `-1`, `-2`, ... as on GitHub.
 function headingAnchors(file) {
   const anchors = new Set();
   const seen = new Map();
-  for (const line of stripFencedCodeBlocks(fs.readFileSync(file, 'utf8')).split('\n')) {
-    const match = line.match(/^ {0,3}#{1,6}[ \t]+(.*?)(?:[ \t]+#+)?[ \t]*$/);
-    if (!match) continue;
-    const slug = slugify(match[1]);
+  const addHeading = (heading) => {
+    const slug = slugify(heading);
     let count = seen.get(slug) || 0;
     let anchor = count === 0 ? slug : `${slug}-${count}`;
     while (anchors.has(anchor)) anchor = `${slug}-${++count}`;
     anchors.add(anchor);
     seen.set(slug, count + 1);
+  };
+  let paragraph = [];
+  for (const line of stripFencedCodeBlocks(fs.readFileSync(file, 'utf8')).split('\n')) {
+    const atx = line.match(/^ {0,3}#{1,6}[ \t]+(.*?)(?:[ \t]+#+)?[ \t]*$/);
+    if (atx) {
+      addHeading(atx[1]);
+      paragraph = [];
+    } else if (/^ {0,3}(?:=+|-+)[ \t]*$/.test(line) && paragraph.length) {
+      addHeading(paragraph.join(' '));
+      paragraph = [];
+    } else if (!line.trim() || /^(?: {4}|\t)|^ {0,3}(?:>|(?:[-+*]|\d+[.)])[ \t]|<|(?:[-*_][ \t]*){3,}$)/.test(line)) {
+      paragraph = [];
+    } else {
+      paragraph.push(line.trim());
+    }
   }
   return anchors;
 }

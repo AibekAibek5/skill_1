@@ -511,3 +511,31 @@ test('a duplicate skips a slug occupied by an earlier literal heading', () => {
   const result = run(root);
   assert.equal(result.status, 0, result.stdout + result.stderr);
 });
+
+test('accepts valid Setext heading anchors and still rejects missing fragments', () => {
+  const root = makeSandbox();
+  writeFile(root, 'references/definition-of-done.md', 'Definition of Done\n==================\n\nCheck Results\n-------------\n');
+  writeFile(root, 'skills/example/SKILL.md', 'See [DoD](../../references/definition-of-done.md#definition-of-done) and [checks](../../references/definition-of-done.md#check-results).\n');
+  const valid = run(root);
+  assert.equal(valid.status, 0, valid.stdout + valid.stderr);
+  writeFile(root, 'skills/example/SKILL.md', 'See [missing](../../references/definition-of-done.md#missing).\n');
+  const invalid = run(root);
+  assert.equal(invalid.status, 1, invalid.stdout + invalid.stderr);
+});
+
+test('Setext and ATX headings share duplicate numbering, including multiline titles', () => {
+  const root = makeSandbox();
+  writeFile(root, 'references/definition-of-done.md', 'Check Results\n=============\n\n# Check Results\n\nLong\nTitle\n-----\n');
+  writeFile(root, 'skills/example/SKILL.md', '[repeat](../../references/definition-of-done.md#check-results-1) [multiline](../../references/definition-of-done.md#long-title)\n');
+  const result = run(root);
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+});
+
+test('does not invent Setext anchors from fenced or indented examples', () => {
+  const root = makeSandbox();
+  writeFile(root, 'references/definition-of-done.md', '```md\nFake Heading\n============\n```\n\n    Indented Heading\n    ----------------\n');
+  writeFile(root, 'skills/example/SKILL.md', '[fence](../../references/definition-of-done.md#fake-heading) [indent](../../references/definition-of-done.md#indented-heading)\n');
+  const result = run(root);
+  assert.equal(result.status, 1, result.stdout + result.stderr);
+  assert.match(result.stdout, /2 error\(s\)/);
+});
