@@ -117,6 +117,12 @@ This works cleanly when `jq` lives in its own directory (e.g. `/opt/homebrew/bin
 
 The hook's `command -v jq` check fails under the stripped `PATH`, the jq-missing fallback runs, and the test asserts the `jq is required` guidance in `additionalContext` instead of the meta-skill body.
 
+## Adding or Changing a Validator
+
+The scripts under `scripts/` are the repository's own quality bar, so they are held to the one they enforce. A new validator ships as a set: the script, a `scripts/<name>-test.js` unit-test file that exercises each rule it adds (including the case it must not flag), and a step in `.github/workflows/test-plugin-install.yml` that runs both. A change to an existing validator updates its test file in the same PR. A validator with no test or no CI step is incomplete, however correct the script.
+
+Before proposing one, check that an existing script does not already cover the rule; a second check for the same property, with its own tokenizer or threshold, is a maintenance cost, not a safeguard.
+
 ## Reporting Issues
 
 Open an issue if you find:
