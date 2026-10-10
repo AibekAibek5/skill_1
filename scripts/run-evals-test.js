@@ -56,6 +56,8 @@ function makeSandbox() {
   fs.mkdirSync(path.join(root, 'evals', 'cases'), { recursive: true });
   fs.mkdirSync(path.join(root, 'evals', 'fixtures', 'project'), { recursive: true });
   fs.copyFileSync(RUNNER, path.join(root, 'scripts', 'run-evals.js'));
+  fs.mkdirSync(path.join(root, 'scripts', 'lib'), { recursive: true });
+  fs.copyFileSync(path.join(__dirname, 'lib', 'skill-lint.js'), path.join(root, 'scripts', 'lib', 'skill-lint.js'));
   fs.writeFileSync(path.join(root, 'evals', 'fixtures', 'project', 'context.txt'), 'fixture\n');
   return root;
 }
@@ -687,4 +689,19 @@ test('removes the throwaway workspace when fixture setup fails', () => {
     fs.rmSync(root, { recursive: true, force: true });
     fs.rmSync(temp, { recursive: true, force: true });
   }
+});
+
+
+test('loads quoted YAML skill identities using their decoded values', () => {
+  const root = makeSandbox();
+  try {
+    writeSkill(root, 'alpha', 'code unit tests');
+    const skill = path.join(root, 'skills', 'alpha', 'SKILL.md');
+    fs.writeFileSync(skill, fs.readFileSync(skill, 'utf8').replace('name: alpha', "name: 'alpha'")
+      .replace('description: code unit tests', 'description: "code unit tests"'));
+    writeJson(path.join(root, 'evals', 'cases', 'alpha.json'), completeCase('alpha', 'code unit tests'));
+    const result = run(root);
+    assert.equal(result.status, 0, result.stdout + result.stderr);
+    assert.match(result.stdout, /PASSED/);
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });

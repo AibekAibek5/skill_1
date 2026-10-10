@@ -31,6 +31,7 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const { parseFrontmatter } = require('./lib/skill-lint');
 const { execFileSync } = require('child_process');
 
 const ROOT = path.join(__dirname, '..');
@@ -156,10 +157,9 @@ function loadSkills() {
     const file = path.join(SKILLS_DIR, dir, 'SKILL.md');
     if (!fs.existsSync(file)) continue;
     const src = fs.readFileSync(file, 'utf8');
-    const m = src.match(/^---[ \t]*\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)/);
-    if (!m) continue;
-    const name = (m[1].match(/^name:\s*(.+)$/m) || [])[1];
-    const description = (m[1].match(/^description:\s*(.+)$/m) || [])[1];
+    const frontmatter = parseFrontmatter(src);
+    if (!frontmatter) continue;
+    const { name, description } = frontmatter;
     if (name && description) skills.push({ name: name.trim(), description: description.trim(), dir });
   }
   return skills;
