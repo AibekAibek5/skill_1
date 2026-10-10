@@ -518,6 +518,11 @@ function lintSkillLayout(skillDir) {
       const rel = relBase ? `${relBase}/${entry.name}` : entry.name;
       const abs = path.join(dir, entry.name);
 
+      if (entry.isSymbolicLink() && !fs.existsSync(abs)) {
+        errors.push(`Dangling supporting-file link \`${rel}\` — its target is missing`);
+        continue;
+      }
+
       if (entry.isDirectory()) {
         if (isEffectivelyEmpty(abs)) {
           errors.push(

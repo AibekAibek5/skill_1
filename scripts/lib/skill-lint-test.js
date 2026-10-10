@@ -760,3 +760,26 @@ test('persona: the Composition heading match is case-insensitive and tolerates t
   const body = '# Persona\n\n## composition   \n\n- **Invoke via:** `/ship`.\n';
   assert.deepEqual(lintPersonaContent('code-reviewer', personaFile({ body })).errors, []);
 });
+
+test('reports a dangling supporting-file symlink instead of accepting a broken package', (t) => {
+  if (process.platform === 'win32') return t.skip('creating file symlinks requires Windows developer mode');
+  const dir = makeSkillDir({ dirs: ['references'] });
+  try {
+    fs.symlinkSync('missing.md', path.join(dir, 'references', 'guide.md'));
+    const errors = lintSkillLayout(dir);
+    assert.ok(errors.some(error => /references\/guide\.md/.test(error) && /dangling|broken|missing/i.test(error)), errors.join('\n'));
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('continues to accept supporting-file links whose targets exist', (t) => {
+  if (process.platform === 'win32') return t.skip('creating file symlinks requires Windows developer mode');
+  const dir = makeSkillDir({ files: { 'references/target.md': 'Useful reference\n' } });
+  try {
+    fs.symlinkSync('target.md', path.join(dir, 'references', 'guide.md'));
+    assert.deepEqual(lintSkillLayout(dir), []);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
