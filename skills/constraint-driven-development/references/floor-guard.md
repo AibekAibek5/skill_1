@@ -33,8 +33,13 @@ const base = (() => {
 // GIT_DIFF_OPTS are dropped from the environment for the same reason.
 const env = { ...process.env };
 delete env.GIT_EXTERNAL_DIFF; delete env.GIT_DIFF_OPTS;
+const MAX_DIFF_BYTES = 8 * 1024 * 1024;
 const git = (args, { diffExit = false } = {}) => {
-  try { return execFileSync('git', args, { encoding: 'utf8', env, stdio: ['ignore', 'pipe', 'pipe'] }); }
+  try {
+    return execFileSync('git', args, {
+      encoding: 'utf8', env, maxBuffer: MAX_DIFF_BYTES, stdio: ['ignore', 'pipe', 'pipe'],
+    });
+  }
   catch (e) { return diffExit && e.status === 1 && typeof e.stdout === 'string' ? e.stdout : null; }
 };
 const bail = (msg) => { console.error('floor-guard: ' + msg); process.exit(2); };
@@ -50,32 +55,48 @@ process.chdir(top);
 const mergeBase = git(['merge-base', base, 'HEAD'])?.trim();
 if (!mergeBase) bail('no merge base against ' + base);
 
-// Unified diff plus untracked files (git diff alone cannot see new files). A rename is reported
-// as a deletion plus an addition (--no-renames), so moving a test file to `app.test.js.disabled`
-// or `CONSTRAINTS.md` to another name is still a deleted file. --text keeps a file that
-// .gitattributes marks `-diff` or binary from collapsing to "Binary files differ".
-const DIFF = ['--unified=0', '--no-color', '--no-ext-diff', '--no-textconv', '--no-renames',
+// Unified diff plus untracked files (git diff alone cannot see new files). Detect renames so a
+// test moved to another test name is not mistaken for a deletion. --text keeps a file that
+// .gitattributes marks `-diff` from collapsing to "Binary files differ"; its output is bounded,
+// and NUL-marked files are excluded from text-pattern checks below.
+const DIFF = ['--unified=0', '--no-color', '--no-ext-diff', '--no-textconv', '--find-renames',
   '--text', '--src-prefix=a/', '--dst-prefix=b/'];
 const tracked = git(['diff', ...DIFF, mergeBase, '--']);
 if (tracked === null) bail('could not diff against ' + mergeBase);
+const renameStatus = git(['diff', '--name-status', '-z', '--find-renames', mergeBase, '--']);
+if (renameStatus === null) bail('could not identify renamed files against ' + mergeBase);
+const renames = [];
+const statusFields = renameStatus.split('\0').filter(Boolean);
+for (let i = 0; i < statusFields.length;) {
+  const status = statusFields[i++];
+  const pathCount = status[0] === 'R' || status[0] === 'C' ? 2 : 1;
+  if (status[0] === 'R') renames.push([statusFields[i], statusFields[i + 1]]);
+  i += pathCount;
+}
 const untrackedFiles = git(['ls-files', '--others', '--exclude-standard']);
 if (untrackedFiles === null) bail('could not list untracked files');
-const untracked = untrackedFiles.split('\n').filter(Boolean).map((f) => {
+let diffBytes = Buffer.byteLength(tracked, 'utf8') + 1;
+if (diffBytes > MAX_DIFF_BYTES) bail('diff exceeds the 8 MiB safety limit');
+const untracked = [];
+for (const f of untrackedFiles.split('\n').filter(Boolean)) {
   const d = git(['diff', '--no-index', ...DIFF, '/dev/null', f], { diffExit: true });
   if (d === null) bail('could not diff untracked file ' + f);
-  return d;
-}).join('\n');
-const diff = tracked + '\n' + untracked;
+  diffBytes += Buffer.byteLength(d, 'utf8') + 1;
+  if (diffBytes > MAX_DIFF_BYTES) bail('diff exceeds the 8 MiB safety limit');
+  untracked.push(d);
+}
+const diff = tracked + '\n' + untracked.join('\n');
 
 // Walk the diff. `---` and `+++` are file headers only between a file's `diff` line and its first
 // `@@` hunk; inside a hunk every line is content, so an added `++i` (shown as `+++i`) or a removed
 // `-- comment` is a change, not a header. Both headers name the file, so a deletion
 // (`+++ /dev/null`) keeps its name.
-const added = [], removed = [], deleted = [];
+const added = [], removed = [], deleted = [], binaryFiles = new Set();
 const pathOf = (s) => s.replace(/^[ab]\//, '');
 let file = '', oldFile = '', inHeader = false;
 for (const line of diff.split('\n')) {
-  if (line.startsWith('diff ')) inHeader = true;
+  if (file && line.includes('\0')) binaryFiles.add(file);
+  if (line.startsWith('diff ')) { inHeader = true; file = ''; oldFile = ''; }
   else if (line.startsWith('@@')) inHeader = false;
   else if (inHeader) {
     if (line.startsWith('--- ')) oldFile = pathOf(line.slice(4));
@@ -91,8 +112,17 @@ for (const line of diff.split('\n')) {
 
 const findings = [];
 const flag = (rule, f, text) => findings.push({ rule, file: f, text: text.trim().slice(0, 120) });
-const isTest = (f) => /\.(test|spec)\.|_test\.|test_/.test(f);
+const isTest = (f) => /(?:^|[\\/])tests?[\\/]/.test(f)
+  || /(?:^|[\\/])[^\\/]+\.(?:test|spec)\.[^./\\]+$/.test(f)
+  || /(?:^|[\\/])[^\\/]*_test\.[^./\\]+$/.test(f)
+  || /(?:^|[\\/])test_[^\\/]+$/.test(f);
 const isConstraints = (f) => /CONSTRAINTS\.md$/.test(f);
+
+for (const [from, to] of renames) {
+  if ((isTest(from) && !isTest(to)) || (isConstraints(from) && !isConstraints(to))) {
+    deleted.push(from);
+  }
+}
 
 // 1. Silenced checker — extend this list for your ecosystem.
 const SUPPRESSIONS = /@ts-ignore|@ts-nocheck|eslint-disable|biome-ignore|# *noqa|# *type: *ignore|istanbul ignore|nosemgrep|gitleaks:allow|Stryker disable/;
@@ -102,6 +132,7 @@ const STUBS = /throw new (Error|NotImplemented).*[Nn]ot implemented|catch\s*\(\w
 const SKIPS = /\.(skip|todo)\b|\bxit\(|\bxdescribe\(|@pytest\.mark\.skip|t\.Skip\(/;
 
 for (const { file, text } of added) {
+  if (binaryFiles.has(file)) continue;
   if (SUPPRESSIONS.test(text)) flag('silenced-checker', file, text);
   if (STUBS.test(text)) flag('unfinished-work', file, text);
   if (SKIPS.test(text)) flag('test-made-easier', file, text);

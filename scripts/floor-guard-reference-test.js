@@ -177,7 +177,7 @@ for (const [name, expectedExit, mutate] of cases) {
 // The guard parses git's output, so neither a rename nor the user's git config or environment
 // may turn a violation into output it skips. Each of these exited 0 ("clean") before.
 const hostile = [
-  ['a test file renamed away is a violation', (root) => {
+  ['a test renamed to a non-test path is a violation', (root) => {
     git(root, 'mv', 'app.test.js', 'app.test.js.disabled');
   }, /\[test-deleted\] app\.test\.js:/],
   ['CONSTRAINTS.md renamed away is a violation', (root) => {
@@ -217,6 +217,41 @@ for (const [name, mutate, expected] of hostile) {
     assert.match(result.stderr, expected);
   });
 }
+
+test('floor guard: renaming a test file to another test name is silent', () => {
+  const root = makeRepo();
+  git(root, 'mv', 'app.test.js', 'app.spec.js');
+  const result = runGuard(root);
+  assert.equal(result.status, 0, result.stderr);
+});
+
+test('floor guard: renaming the test directory from test/ to tests/ is silent', () => {
+  const root = makeRepo();
+  fs.mkdirSync(path.join(root, 'test'));
+  fs.writeFileSync(path.join(root, 'test', 'legacy.js'), 'assert(true);\n');
+  git(root, 'add', 'test/legacy.js');
+  git(root, 'commit', '-qm', 'add legacy test');
+  git(root, 'mv', 'test', 'tests');
+  const result = runGuard(root);
+  assert.equal(result.status, 0, result.stderr);
+});
+
+test('floor guard: a large untracked binary does not overflow the diff buffer', () => {
+  const root = makeRepo();
+  fs.writeFileSync(path.join(root, 'artifact.bin'), Buffer.alloc(2 * 1024 * 1024));
+  const result = runGuard(root);
+  assert.equal(result.status, 0, `expected clean, got ${result.status}\n${result.stderr}`);
+});
+
+test('floor guard: TODO bytes in an untracked binary are not unfinished work', () => {
+  const root = makeRepo();
+  fs.writeFileSync(
+    path.join(root, 'artifact.bin'),
+    Buffer.concat([Buffer.from([0, 1]), Buffer.from('TODO'), Buffer.from([2, 255])]),
+  );
+  const result = runGuard(root);
+  assert.equal(result.status, 0, result.stderr);
+});
 
 test('floor guard: a removed exception row is silent', () => {
   const root = makeRepo();
