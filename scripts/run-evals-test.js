@@ -299,6 +299,33 @@ test('rejects an invalid rank-1 floor', () => {
   assert.match(result.stderr, /--min-rank1 must be a number from 0 to 100/);
 });
 
+test('routes clipped prompt forms to their long-form skill (see #660)', () => {
+  const root = makeSandbox();
+  // Note: the skill name must not contain the clipped form itself — name
+  // tokens are weighted 2x, which would route the prompt even without the
+  // alias map. The prompt shares no vocabulary with the description except
+  // the clipped/long pair (auth/authentication): without the alias map the
+  // skill scores zero and the positive prompt fails.
+  writeSkill(
+    root,
+    'credential-skill',
+    'Protects credential verification. Use when configuring authentication ceremonies.',
+  );
+  writeSkill(root, 'paint-skill', 'Paints sheds. Use when choosing exterior paint colors.');
+  writeJson(
+    path.join(root, 'evals', 'cases', 'credential-skill.json'),
+    completeCase('credential-skill', 'fix broken auth checks', 1),
+  );
+  writeJson(
+    path.join(root, 'evals', 'cases', 'paint-skill.json'),
+    completeCase('paint-skill', 'choose exterior paint colors', 1),
+  );
+
+  const result = run(root);
+
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+});
+
 // ---------- parseGrading expectation-binding tests ----------
 
 test('accepts reordered-but-complete grader results', () => {

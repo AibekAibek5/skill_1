@@ -69,7 +69,9 @@ const STOP = new Set([
 function stem(t) {
   // Light suffix stripping so "conflicts"/"conflict", "branching"/"branch",
   // "architectural"/"architecture" cluster together. Not a real stemmer.
-  for (const suf of ['ally', 'ing', 'ed', 'es', 'al']) {
+  // "ation" folds Latinate nominalizations ("documentation"/"document",
+  // "configuration"/"configure", "specification"/"specific") the same way.
+  for (const suf of ['ally', 'ing', 'ation', 'ed', 'es', 'al']) {
     if (t.length > suf.length + 3 && t.endsWith(suf)) {
       t = t.slice(0, -suf.length);
       break;
@@ -86,13 +88,34 @@ function stem(t) {
   return t;
 }
 
+// Clipped forms users type that never share a stem with the long form used
+// in descriptions ("docs" vs "documentation", "auth" vs "authentication").
+// Applied before stemming; each value is the canonical long form, so both
+// registers stem identically. Explicit and easy to extend (see #660) —
+// prefer adding an entry here over padding descriptions with clipped forms,
+// which would only teach skills to game the lexical proxy.
+const TOKEN_ALIASES = new Map(
+  Object.entries({
+    doc: 'document',
+    docs: 'document',
+    config: 'configuration',
+    configs: 'configuration',
+    auth: 'authenticate',
+    authentication: 'authenticate',
+    repo: 'repository',
+    repos: 'repository',
+    dep: 'dependency',
+    deps: 'dependency',
+  }),
+);
+
 function tokenize(text) {
   return text
     .toLowerCase()
     .replace(/[^a-z0-9\s-]/g, ' ')
     .split(/[\s-]+/)
     .filter((t) => t.length > 2 && !STOP.has(t))
-    .map(stem);
+    .map((t) => stem(TOKEN_ALIASES.get(t) || t));
 }
 
 function termFreq(tokens) {
