@@ -516,8 +516,44 @@ cat "$PROJ/t" > "$RT"
 rt_hook_event "$PROJ" "" "" 2>/dev/null || true
 assert_eq "no-event removal: Stop puts the protected block back" "1" "$(grep -c 'const keepOne = 42' "$RT" || true)"
 
+# ── Test 18: Stop refuses cached restore paths outside the project ────────────
+printf '\nTest 18: Stop refuses cached restore paths outside the project\n'
+run_untrusted_restore_path() {
+  local name="$1" target="$2" project="$TMPDIR/path-guard-$1"
+  local cache="$project/.claude/.simplify-ignore-cache" id="pathguard"
+  mkdir -p "$cache"
+  printf '%s' "$target" > "$cache/${id}.path"
+  printf '%s\n' "attacker-controlled backup" > "$cache/${id}.bak"
+
+  rt_hook_event "$project" "" "" 2>/dev/null || true
+  assert_eq "$name: external target is unchanged" "original outside content" "$(cat "$outside_file")"
+  assert_eq "$name: rejected backup remains for recovery" "1" \
+    "$([ -f "$cache/${id}.bak" ] && echo 1 || echo 0)"
+}
+
+outside_file="$TMPDIR/path-guard-outside"
+printf '%s\n' "original outside content" > "$outside_file"
+run_untrusted_restore_path "absolute path" "$outside_file" "original outside content"
+run_untrusted_restore_path "parent-traversal" "$TMPDIR/path-guard-parent-traversal/../path-guard-outside" "original outside content"
+
+mkdir -p "$TMPDIR/path-guard-symlinked-parent"
+if ln -s "$TMPDIR" "$TMPDIR/path-guard-symlinked-parent/link" 2>/dev/null &&
+  [ -L "$TMPDIR/path-guard-symlinked-parent/link" ]; then
+  run_untrusted_restore_path "symlinked-parent" "$TMPDIR/path-guard-symlinked-parent/link/path-guard-outside" "original outside content"
 else
-  printf '\nTests 14-17 skipped: jq not available (hook no-ops without it)\n'
+  printf '  SKIP: symlinked parent (symlink creation unavailable)\n'
+fi
+
+mkdir -p "$TMPDIR/path-guard-symlinked-target"
+if ln -s "$outside_file" "$TMPDIR/path-guard-symlinked-target/link" 2>/dev/null &&
+  [ -L "$TMPDIR/path-guard-symlinked-target/link" ]; then
+  run_untrusted_restore_path "symlinked-target" "$TMPDIR/path-guard-symlinked-target/link" "original outside content"
+else
+  printf '  SKIP: symlinked target (symlink creation unavailable)\n'
+fi
+
+else
+  printf '\nTests 14-18 skipped: jq not available (hook no-ops without it)\n'
 fi
 
 # ── Summary ──────────────────────────────────────────────────────────────
