@@ -55,11 +55,9 @@ hash_cmd() {
 file_id() { printf '%s' "$1" | hash_cmd | cut -c1-16; }
 block_hash() { printf '%s' "$1" | hash_cmd | cut -c1-8; }
 
-# -- inside_project: may the hook read or write the file at $1? ---------------
-# The cache lives inside the project, so a cloned repository can ship a crafted
-# one whose <id>.path names any file on disk. Stop would then overwrite that
-# file with the shipped .bak and copy its previous contents into the project.
-# The hook therefore only ever touches paths inside the project root:
+# -- safe_restore_target: may Stop restore the cached target at $1? -----------
+# A stale or malformed cache entry can name a file outside the project. Stop
+# must not overwrite or copy data through that path:
 #   - no newline and no `..` component (checked before anything is resolved);
 #   - the final component is not a symlink (a write would follow it);
 #   - the nearest existing ancestor, resolved physically with `cd -P` so that
@@ -67,7 +65,7 @@ block_hash() { printf '%s' "$1" | hash_cmd | cut -c1-8; }
 #     resolved project root. Missing trailing directories are allowed (a moved
 #     file's directory may be gone) but must not exist as anything else.
 # On Git Bash/MSYS, C:\... and C:/... paths are converted with cygpath first.
-inside_project() {
+safe_restore_target() {
   local p="$1" root="$PROJECT_DIR" dir next rest="" nl='
 '
   [ -n "$p" ] || return 1
@@ -301,7 +299,7 @@ if [ -z "$TOOL_NAME" ]; then
     pathfile="$CACHE/${fid}.path"
     [ -f "$pathfile" ] || { rm -f "$bak"; continue; }
     orig=$(cat "$pathfile")
-    if ! inside_project "$orig"; then
+    if ! safe_restore_target "$orig"; then
       # Never read or write through a path the cache names outside the
       # project. Keep the entry so a genuine backup is not destroyed.
       printf 'Warning: refusing to restore %s: outside %s or through a symlink. Cache entry kept at %s\n' \
@@ -358,7 +356,6 @@ fi
 if [ "$TOOL_NAME" = "Read" ]; then
   [ -f "$FILE_PATH" ] || exit 0
   case "$(basename "$FILE_PATH")" in simplify-ignore*|SIMPLIFY-IGNORE*) exit 0 ;; esac
-  inside_project "$FILE_PATH" || exit 0
 
   mkdir -p "$CACHE"
   ID=$(file_id "$FILE_PATH")
@@ -399,7 +396,6 @@ fi
 
 # ── PostToolUse Edit|Write: expand, then re-filter ────────────────────────────
 if [ "$TOOL_NAME" = "Edit" ] || [ "$TOOL_NAME" = "Write" ]; then
-  inside_project "$FILE_PATH" || exit 0
   ID=$(file_id "$FILE_PATH")
   [ -f "$CACHE/${ID}.bak" ] || exit 0
   ls "$CACHE/${ID}".block.* >/dev/null 2>&1 || exit 0
