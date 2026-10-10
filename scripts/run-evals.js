@@ -307,7 +307,12 @@ function runDeterministic(minRank1) {
     // Trigger: positive
     for (const t of d.trigger?.positive || []) {
       positives++;
-      const topK = t.top_k || 3;
+      const topK = t.top_k === undefined ? 3 : t.top_k;
+      if (!Number.isInteger(topK) || topK <= 0) {
+        console.log(`  ✗  ${c.file}: positive top_k must be a positive integer`);
+        errors++;
+        continue;
+      }
       const ranking = rankSkills(t.prompt, corpus);
       const idx = ranking.findIndex((r) => r.name === expected);
       const hit = ranking[idx];
@@ -348,7 +353,7 @@ function runDeterministic(minRank1) {
         } else {
           const ownerIdx = ranking.findIndex((r) => r.name === t.owner);
           const selfIdx = ranking.findIndex((r) => r.name === expected);
-          if (ranking[ownerIdx].score === 0 || ownerIdx > selfIdx) {
+          if (ranking[ownerIdx].score === 0 || ownerIdx >= selfIdx) {
             console.log(`  ✗  ${expected}: declared owner ${t.owner} does not outrank it for negative prompt`);
             console.log(`       "${t.prompt}" (owner #${ownerIdx + 1} @ ${ranking[ownerIdx].score.toFixed(2)}, self #${selfIdx + 1})`);
             errors++;

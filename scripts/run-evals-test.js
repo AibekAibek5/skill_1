@@ -688,3 +688,32 @@ test('removes the throwaway workspace when fixture setup fails', () => {
     fs.rmSync(temp, { recursive: true, force: true });
   }
 });
+
+
+test('rejects invalid positive ranking thresholds instead of defaulting or coercing them', () => {
+  for (const topK of [0, -1, 1.5, '1', null]) {
+    const root = makeSandbox();
+    try {
+      writeSkill(root, 'alpha', 'code unit tests');
+      writeJson(path.join(root, 'evals', 'cases', 'alpha.json'), completeCase('alpha', 'code unit tests', topK));
+      const result = run(root);
+      assert.equal(result.status, 1, `top_k=${JSON.stringify(topK)} must be rejected`);
+      assert.match(result.stdout, /top_k must be a positive integer/);
+    } finally { fs.rmSync(root, { recursive: true, force: true }); }
+  }
+});
+
+test('requires a negative prompt owner to strictly outrank the evaluated skill', () => {
+  const root = makeSandbox();
+  try {
+    writeSkill(root, 'alpha', 'code unit tests');
+    writeSkill(root, 'beta', 'deploy release production');
+    const alpha = completeCase('alpha', 'code unit tests');
+    alpha.trigger.negative[0] = { prompt: 'deploy release production code', owner: 'alpha' };
+    writeJson(path.join(root, 'evals', 'cases', 'alpha.json'), alpha);
+    writeJson(path.join(root, 'evals', 'cases', 'beta.json'), completeCase('beta', 'deploy release production'));
+    const result = run(root);
+    assert.equal(result.status, 1);
+    assert.match(result.stdout, /does not outrank/);
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
