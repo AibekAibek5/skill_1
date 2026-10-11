@@ -149,8 +149,6 @@ Before looking at code, understand the intent:
 - What is the expected behavior change?
 ```
 
-If the spec carries requirement IDs, ask for the `requirement-traceability` check output instead of re-deriving coverage by reading, and spend the spec read on whether each tagged test asserts what its requirement says.
-
 ### Step 2: Review the Tests First
 
 Tests reveal intent and coverage:

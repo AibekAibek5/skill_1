@@ -3,8 +3,13 @@
 ## Objective
 Shoppers apply a discount code to a cart total.
 
+## Commands
+- Test: `npm test`
+- Requirement coverage: `node scripts/check-requirements.mjs SPEC.md`
+
 ## Testing Strategy
 Node's built-in test runner, tests in `test/`.
+Test names start with their requirement ID and a colon: `DSC-3: rejects expired codes`.
 
 | Seam | Requirement IDs |
 | --- | --- |

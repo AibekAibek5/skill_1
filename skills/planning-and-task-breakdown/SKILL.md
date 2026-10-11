@@ -103,8 +103,6 @@ Each task follows this structure, whether it lands in the markdown task list or 
 **Estimated scope:** [Small: 1-2 files | Medium: 3-5 files | Large: 5+ files]
 ```
 
-If the spec carries requirement IDs (`1. CPN-1: ...`), add a `Covers:` line to each task, following the `requirement-traceability` skill. A spec without IDs needs nothing here.
-
 ### Step 5: Order and Checkpoint
 
 Arrange tasks so that:
