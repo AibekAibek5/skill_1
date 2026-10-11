@@ -70,7 +70,12 @@ function stem(t) {
   // Light suffix stripping so "conflicts"/"conflict", "branching"/"branch",
   // "architectural"/"architecture" cluster together. Not a real stemmer.
   // "ation" folds Latinate nominalizations ("documentation"/"document",
-  // "configuration"/"configure", "specification"/"specific") the same way.
+  // "configuration"/"configure") the same way.
+  // "-ification" nouns are built on "-ify" verbs, so they fold to the verb's
+  // "-ifi" stem ("specification"/"specify", "verification"/"verify") rather
+  // than losing "-ication" and colliding with an unrelated word
+  // ("specification"/"specific"). Checked first so it wins over "-ation".
+  if (t.length > 10 && /ifications?$/.test(t)) t = t.replace(/ications?$/, 'i');
   for (const suf of ['ally', 'ing', 'ation', 'ed', 'es', 'al']) {
     if (t.length > suf.length + 3 && t.endsWith(suf)) {
       t = t.slice(0, -suf.length);

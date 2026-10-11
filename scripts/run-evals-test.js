@@ -326,6 +326,28 @@ test('routes clipped prompt forms to their long-form skill (see #660)', () => {
   assert.equal(result.status, 0, result.stdout + result.stderr);
 });
 
+test('folds -ification to its -ify verb, not to the unrelated "specific" (see #660)', () => {
+  const root = makeSandbox();
+  // "specification" is a nominalization of "specify", so it must reach the
+  // spec skill. Stripping a bare "-ation" instead yields "specific", which
+  // silently cross-merges the two words and starves the spec skill. Each
+  // prompt shares vocabulary with its own skill only.
+  writeSkill(root, 'spec-skill', 'Agree on requirements up front. Use when you specify behaviour.');
+  writeSkill(root, 'specific-skill', 'Narrow a choice down. Use when one target matters.');
+  writeJson(
+    path.join(root, 'evals', 'cases', 'spec-skill.json'),
+    completeCase('spec-skill', 'document a specification for the billing rollout', 1),
+  );
+  writeJson(
+    path.join(root, 'evals', 'cases', 'specific-skill.json'),
+    completeCase('specific-skill', 'narrow the choice down to one target', 1),
+  );
+
+  const result = run(root);
+
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+});
+
 // ---------- parseGrading expectation-binding tests ----------
 
 test('accepts reordered-but-complete grader results', () => {
